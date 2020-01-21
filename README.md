@@ -2,7 +2,7 @@
 
 [![Travis Status](https://travis-ci.org/neomantra/gcs-static-webserver.svg?branch=master)](https://travis-ci.org/neomantra/gcs-static-webserver)  [![](https://images.microbadger.com/badges/image/neomantra/gcs-static-webserver.svg)](https://microbadger.com/#/images/neomantra/gcs-static-webserver "microbadger.com")
 
-`gcs-static-webserver` is a gcs Golang-based webserver that can serve static content from a path or GCS bucket.  
+`gcs-static-webserver` is a Golang-based webserver that can serve static content from a path or GCS bucket.
 
 It also exposes the following paths:
  * `/metrics` for Prometheus metrics
