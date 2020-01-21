@@ -1,0 +1,21 @@
+# .travis.yml
+# https://travis-ci.org/neomantra/gcs-static-webserver
+# Copyright (c) 2020 Neomantra Corp
+
+sudo: required
+
+services:
+  - docker
+
+jobs:
+  include:
+    - stage: build docker image 
+      script:
+      - docker login -u="$DOCKER_USERNAME" -p="$DOCKER_PASSWORD"
+      - docker build -t $DOCKER_ORG/gcs-static-webserver:$TRAVIS_COMMIT .
+      - if [[ "$TRAVIS_BRANCH" == "master" ]] ; then
+          docke tag $DOCKER_ORG/gcs-static-webserver:$TRAVIS_COMMIT $DOCKER_ORG/gcs-static-webserver:latest && 
+          docker login -u="$DOCKER_USERNAME" -p="$DOCKER_PASSWORD" &&
+          docker push $DOCKER_ORG/gcs-static-webserver:$TRAVIS_COMMIT &&
+          docker push $DOCKER_ORG/gcs-static-webserver:latest ;
+        fi
