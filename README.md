@@ -24,7 +24,7 @@ It generates an access log file to `stdout`.
 | STATIC_SUB_PATH  | string | `"/static"`   | URL sub-path to serve `STATIC_DIR` from |
 | BUCKET           | string |               | GCS Bucket to serve |
 | BUCKET_SUB_PATH  | string | `"/"`         | URL sub-path to serve GCS bucket from |
-| BUCKET_CRED_PATH | string | `"/key.json"` | Bucket Service Account JSON Credentials Path |
+| BUCKET_CRED_PATH | string |               | Bucket Service Account JSON Credentials Path |
 | AUTH_DOMAIN      | string |               | Authentication Policy Domain for JWT verification |
 | AUTH_AUD         | string |               | Authentication Policy Audience (AUD) for JWT verification |
 | AUTH_HEADER      | string |               | Header Key to check for for JWT verification |
@@ -50,6 +50,7 @@ docker run \
     --env PORT=8000 \
     --env BUCKET=my-bucket \
     --env BUCKET_SUB_PATH=/foo \
+    --env BUCKET_CRED_PATH=/key.json \
     gcs-static-webserver
 ```
 

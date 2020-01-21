@@ -37,7 +37,7 @@ type ConfigSpec struct {
 	StaticSubPath  string `split_words:"true"`
 	Bucket         string
 	BucketSubPath  string `split_words:"true"`
-	BucketCredPath string `split_words:"true" default:"/key.json"`
+	BucketCredPath string `split_words:"true"`
 	AuthDomain     string `split_words:"true"`
 	AuthAUD        string `split_words:"true"`
 	AuthHeader     string `split_words:"true"`
@@ -62,10 +62,13 @@ var (
 
 func InitBucket() error {
 	ctx := context.Background()
-	client, err := storage.NewClient(
-		ctx,
-		option.WithCredentialsFile(config.BucketCredPath),
-	)
+	var client *storage.Client
+	var err error
+	if config.BucketCredPath == "" {
+		client, err = storage.NewClient(ctx)
+	} else {
+		client, err = storage.NewClient(ctx, option.WithCredentialsFile(config.BucketCredPath))
+	}
 	if err != nil {
 		return err
 	}
@@ -103,16 +106,11 @@ func HandleBucket(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Length", strconv.Itoa(int(objAttrs.Size)))
 	w.WriteHeader(200)
 	if _, err := io.Copy(w, rc); err != nil {
-		// if os.Getenv("LOGGING") == "true" {
-		// 	elapsed := time.Since(start)
-		// 	log.Println("| 200 |", elapsed.String(), r.Host, r.Method, r.URL.Path)
+		// TODO: log.Println("| 200 |", elapsed.String(), r.Host, r.Method, r.URL.Path)
 		// }
 		return
 	}
-	// if os.Getenv("LOGGING") == "true" {
-	// 	elapsed := time.Since(start)
-	// 	log.Println("| 200 |", elapsed.String(), r.Host, r.Method, r.URL.Path)
-	// }
+	// TODO: log.Println("| 200 |", elapsed.String(), r.Host, r.Method, r.URL.Path)
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -191,7 +189,7 @@ func wrapHandler(h http.Handler) http.HandlerFunc {
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-// Utility
+// Main
 
 func main() {
 	///////////////////////////////////////////////////////
