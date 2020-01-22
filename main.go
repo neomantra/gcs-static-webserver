@@ -1,8 +1,6 @@
 // main.go
 // Copyright (c) 2020 Neomantra Corp
 
-// TODO: IP Whitelist
-
 package main
 
 import (
@@ -15,6 +13,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"time"
 
 	"cloud.google.com/go/storage"
@@ -191,11 +190,22 @@ func InitWhitelist() error {
 func VerifyWhitelist(next http.Handler) http.Handler {
 	fn := func(w http.ResponseWriter, r *http.Request) {
 		if cidrRanger != nil {
+			// check remote address
 			remoteIP, _, _ := net.SplitHostPort(r.RemoteAddr)
 			allowed, _ := cidrRanger.Contains(net.ParseIP(remoteIP))
-
+			forwardedFor := r.Header.Get("X-Forwarded-For")
+			if !allowed && forwardedFor != "" {
+				// chckk forwarded for
+				for _, ip := range strings.Split(forwardedFor, ",") {
+					allowed, _ = cidrRanger.Contains(net.ParseIP(strings.TrimSpace(ip)))
+					if allowed {
+						break
+					}
+				}
+			}
 			if !allowed {
-				logger.Info("blocked", zap.String("remote_ip", remoteIP))
+				logger.Info("blocked by IP whitelist",
+					zap.String("remote_ip", remoteIP), zap.String("forwarded_for", forwardedFor))
 				http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
 				return
 			}
