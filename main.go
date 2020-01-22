@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -22,6 +23,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/kelseyhightower/envconfig"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/yl2chen/cidranger"
 	"go.uber.org/zap"
 	"google.golang.org/api/option"
 )
@@ -38,11 +40,12 @@ type ConfigSpec struct {
 	StaticDir      string `split_words:"true"`
 	StaticSubPath  string `split_words:"true"`
 	Bucket         string
-	BucketSubPath  string `split_words:"true"`
-	BucketCredPath string `split_words:"true"`
-	AuthDomain     string `split_words:"true"`
-	AuthAUD        string `split_words:"true"`
-	AuthHeader     string `split_words:"true"`
+	BucketSubPath  string   `split_words:"true"`
+	BucketCredPath string   `split_words:"true"`
+	AuthDomain     string   `split_words:"true"`
+	AuthAUD        string   `split_words:"true"`
+	AuthHeader     string   `split_words:"true"`
+	AllowedCIDR    []string `split_words:"true"`
 }
 
 var (
@@ -51,6 +54,9 @@ var (
 
 	// main config
 	config ConfigSpec
+
+	// IP Whitelist
+	cidrRanger cidranger.Ranger
 
 	// GCS service
 	bucket *storage.BucketHandle
@@ -121,11 +127,10 @@ func HandleBucket(w http.ResponseWriter, r *http.Request) {
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-// Cloudflare Access JWT Check
+// JWT Audience Check
 
 func InitTokenVerifier() {
 	certsURL := fmt.Sprintf("%s/cdn-cgi/access/certs", config.AuthDomain)
-
 	ctx := context.Background()
 	oidcConfig := &oidc.Config{
 		ClientID: config.AuthAUD,
@@ -135,27 +140,65 @@ func InitTokenVerifier() {
 	jwtVerifier = oidc.NewVerifier(config.AuthDomain, keySet, oidcConfig)
 }
 
-// VerifyToken is a middleware to verify a CF Access token
+// VerifyToken is a middleware to verify a Access token
 func VerifyToken(next http.Handler) http.Handler {
 	fn := func(w http.ResponseWriter, r *http.Request) {
-		headers := r.Header
+		if jwtVerifier != nil {
+			// Make sure that the incoming request has our token header
+			// TODO Could also look in the cookies for CF_AUTHORIZATION
+			accessJWT := r.Header.Get(config.AuthHeader)
+			if accessJWT == "" {
+				w.WriteHeader(http.StatusUnauthorized)
+				w.Write([]byte("No token on the request"))
+				return
+			}
 
-		// Make sure that the incoming request has our token header
-		//  Could also look in the cookies for CF_AUTHORIZATION
-		accessJWT := headers.Get(config.AuthHeader)
-		if accessJWT == "" {
-			w.WriteHeader(http.StatusUnauthorized)
-			w.Write([]byte("No token on the request"))
-			return
+			// Verify the access token
+			ctx := r.Context()
+			_, err := jwtVerifier.Verify(ctx, accessJWT)
+			if err != nil {
+				w.WriteHeader(http.StatusUnauthorized)
+				w.Write([]byte(fmt.Sprintf("Invalid token: %s", err.Error())))
+				return
+			}
 		}
+		next.ServeHTTP(w, r)
+	}
+	return http.HandlerFunc(fn)
+}
 
-		// Verify the access token
-		ctx := r.Context()
-		_, err := jwtVerifier.Verify(ctx, accessJWT)
+///////////////////////////////////////////////////////////////////////////////
+// IP Whitelist
+
+func InitWhitelist() error {
+	if len(config.AllowedCIDR) == 0 {
+		cidrRanger = nil
+		return nil
+	}
+
+	cidrRanger = cidranger.NewPCTrieRanger()
+	for _, cidr := range config.AllowedCIDR {
+		_, net, err := net.ParseCIDR(cidr)
 		if err != nil {
-			w.WriteHeader(http.StatusUnauthorized)
-			w.Write([]byte(fmt.Sprintf("Invalid token: %s", err.Error())))
-			return
+			return err
+		}
+		cidrRanger.Insert(cidranger.NewBasicRangerEntry(*net))
+	}
+	return nil
+}
+
+// VerifyWhitelist verifies against the IP whitelist
+func VerifyWhitelist(next http.Handler) http.Handler {
+	fn := func(w http.ResponseWriter, r *http.Request) {
+		if cidrRanger != nil {
+			remoteIP, _, _ := net.SplitHostPort(r.RemoteAddr)
+			allowed, _ := cidrRanger.Contains(net.ParseIP(remoteIP))
+
+			if !allowed {
+				logger.Info("blocked", zap.String("remote_ip", remoteIP))
+				http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
+				return
+			}
 		}
 		next.ServeHTTP(w, r)
 	}
@@ -201,8 +244,7 @@ func wrapHandler(h http.Handler) http.HandlerFunc {
 func main() {
 	///////////////////////////////////////////////////////
 	// Setup
-	err := envconfig.Process("", &config)
-	if err != nil {
+	if err := envconfig.Process("", &config); err != nil {
 		log.Fatal("failed to process environemnt:", err.Error())
 	}
 
@@ -216,6 +258,11 @@ func main() {
 	if config.AuthAUD != "" {
 		logger.Info("activating JWT verification")
 		InitTokenVerifier()
+	}
+
+	if err := InitWhitelist(); err != nil {
+		logger.Warn("InitWhitelist failed", zap.Error(err))
+		return
 	}
 
 	///////////////////////////////////////////////////////
@@ -240,13 +287,10 @@ func main() {
 			zap.String("static_sub_path", config.StaticSubPath),
 			zap.String("sub_path", config.SubPath))
 		fileserver := http.FileServer(http.Dir(config.StaticDir))
-		if jwtVerifier != nil {
-			router.PathPrefix(config.SubPath).Handler(
-				VerifyToken(wrapHandler(http.StripPrefix(config.SubPath, fileserver)))).Methods("GET")
-		} else {
-			router.PathPrefix(config.SubPath).Handler(
-				wrapHandler(http.StripPrefix(config.SubPath, fileserver))).Methods("GET")
-		}
+
+		router.PathPrefix(config.SubPath).Handler(
+			VerifyWhitelist(VerifyToken(
+				wrapHandler(http.StripPrefix(config.SubPath, fileserver))))).Methods("GET")
 	}
 
 	if config.Bucket != "" {
@@ -261,13 +305,9 @@ func main() {
 		}
 
 		bucketHandler := http.HandlerFunc(HandleBucket)
-		if jwtVerifier != nil {
-			router.PathPrefix(config.SubPath).Handler(
-				VerifyToken(http.StripPrefix(config.SubPath, bucketHandler))).Methods("GET")
-		} else {
-			router.PathPrefix(config.SubPath).Handler(
-				http.StripPrefix(config.SubPath, bucketHandler)).Methods("GET")
-		}
+		router.PathPrefix(config.SubPath).Handler(
+			VerifyWhitelist(VerifyToken(
+				http.StripPrefix(config.SubPath, bucketHandler)))).Methods("GET")
 	}
 
 	///////////////////////////////////////////////////////

@@ -30,6 +30,7 @@ It generates an access log file to `stdout`.
 | AUTH_DOMAIN      | string |               | Authentication Policy Domain for JWT verification |
 | AUTH_AUD         | string |               | Authentication Policy Audience (AUD) for JWT verification |
 | AUTH_HEADER      | string |               | Header Key to check for for JWT verification |
+| ALLOWED_CIDR     | string |               | Comma seperated list of CIDRs to whitelist for origin IP (default is no whitelist) |
 
 ## Build and Run
 
