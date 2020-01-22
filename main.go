@@ -34,6 +34,7 @@ type ConfigSpec struct {
 	Port           int    `default:"80"`
 	SubPath        string `split_words:"true"`
 	IndexPath      string `split_words:"true"`
+	MetricsPath    string `split_words:"true"`
 	StaticDir      string `split_words:"true"`
 	StaticSubPath  string `split_words:"true"`
 	Bucket         string
@@ -221,6 +222,18 @@ func main() {
 	// Configure router
 	router := mux.NewRouter() //.StrictSlash(true)
 
+	if config.MetricsPath != "" {
+		router.Handle(config.MetricsPath, handlers.LoggingHandler(os.Stdout, promhttp.Handler()))
+	}
+
+	router.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("OK"))
+	})
+
+	router.HandleFunc("/readiness", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("OK"))
+	})
+
 	if config.StaticDir != "" {
 		logger.Info("activating static service",
 			zap.String("static_dir", config.StaticDir),
@@ -256,16 +269,6 @@ func main() {
 				http.StripPrefix(config.SubPath, bucketHandler)).Methods("GET")
 		}
 	}
-
-	router.Handle("/metrics", handlers.LoggingHandler(os.Stdout, promhttp.Handler()))
-
-	router.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("OK"))
-	})
-
-	router.HandleFunc("/readiness", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("OK"))
-	})
 
 	///////////////////////////////////////////////////////
 	// Run webserver

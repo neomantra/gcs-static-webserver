@@ -21,6 +21,7 @@ It generates an access log file to `stdout`.
 | PORT             | int    | 80            | Port to listen on  |
 | SUB_PATH         | string |               | Sub-path to PathPrefix |
 | INDEX_PATH       | string |               | Path to check when not URL not found (e.g. `index.html`) |
+| METRICS_PATH     | string |               | Path to expose Prometheus metrics (e.g. `/metrics`) |
 | STATIC_DIR       | string |               | Static directory to serve |
 | STATIC_SUB_PATH  | string | `"/static"`   | URL sub-path to serve `STATIC_DIR` from |
 | BUCKET           | string |               | GCS Bucket to serve |
