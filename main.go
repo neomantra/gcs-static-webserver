@@ -33,6 +33,7 @@ type ConfigSpec struct {
 	Address        string
 	Port           int    `default:"80"`
 	SubPath        string `split_words:"true"`
+	IndexPath      string `split_words:"true"`
 	StaticDir      string `split_words:"true"`
 	StaticSubPath  string `split_words:"true"`
 	Bucket         string
@@ -77,18 +78,24 @@ func InitBucket() error {
 }
 
 func HandleBucket(w http.ResponseWriter, r *http.Request) {
-	//start := time.Now()
 	objectPath := config.BucketSubPath + r.URL.Path
 	oh := bucket.Object(objectPath)
 
 	ctx := r.Context()
 	objAttrs, err := oh.Attrs(ctx)
 	if err != nil {
-		logger.Warn("Object not found",
-			zap.String("object_path", objectPath),
-			zap.Error(err))
-		http.Error(w, "Not found", 404)
-		return
+		if err == storage.ErrObjectNotExist && config.IndexPath != "" {
+			// try /index.html
+			oh = bucket.Object(objectPath + config.IndexPath)
+			objAttrs, err = oh.Attrs(ctx)
+		}
+		if err != nil {
+			logger.Warn("Object not found",
+				zap.String("object_path", objectPath),
+				zap.Error(err))
+			http.Error(w, "Not found", 404)
+			return
+		}
 	}
 	o := oh.ReadCompressed(true)
 	rc, err := o.NewReader(ctx)
@@ -107,7 +114,6 @@ func HandleBucket(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(200)
 	if _, err := io.Copy(w, rc); err != nil {
 		// TODO: log.Println("| 200 |", elapsed.String(), r.Host, r.Method, r.URL.Path)
-		// }
 		return
 	}
 	// TODO: log.Println("| 200 |", elapsed.String(), r.Host, r.Method, r.URL.Path)

@@ -20,6 +20,7 @@ It generates an access log file to `stdout`.
 | ADDRESS          | string | `""`          | Address to listen to |
 | PORT             | int    | 80            | Port to listen on  |
 | SUB_PATH         | string |               | Sub-path to PathPrefix |
+| INDEX_PATH       | string |               | Path to check when not URL not found (e.g. `index.html`) |
 | STATIC_DIR       | string |               | Static directory to serve |
 | STATIC_SUB_PATH  | string | `"/static"`   | URL sub-path to serve `STATIC_DIR` from |
 | BUCKET           | string |               | GCS Bucket to serve |
@@ -49,7 +50,7 @@ docker run \
     -p 8000:8000 \
     --env PORT=8000 \
     --env BUCKET=my-bucket \
-    --env BUCKET_SUB_PATH=/foo \
+    --env BUCKET_SUB_PATH=foo \
     --env BUCKET_CRED_PATH=/key.json \
     gcs-static-webserver
 ```
