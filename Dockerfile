@@ -6,7 +6,7 @@
 ###############################################################################
 
 ARG GOLANG_IMAGE_BASE="golang"
-ARG GOLANG_IMAGE_TAG="1.13-alpine"
+ARG GOLANG_IMAGE_TAG="1.14.2-alpine3.11"
 
 ARG RUNTIME_IMAGE_BASE="alpine"
 ARG RUNTIME_IMAGE_TAG="3.11"
