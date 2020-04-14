@@ -20,7 +20,8 @@ It generates an access log file to `stdout`.
 | ADDRESS          | string | `""`          | Address to listen to |
 | PORT             | int    | 80            | Port to listen on  |
 | SUB_PATH         | string |               | Sub-path to PathPrefix |
-| INDEX_PATH       | string |               | Path to check when not URL not found (e.g. `index.html`) |
+| INDEX_PATH       | string |               | Path to check when path ends in a slash (e.g. `index.html`) |
+| NOT_FOUND_PATH   | string |               | Path to check when the URL is not found (e.g. `404.html`) |
 | METRICS_PATH     | string |               | Path to expose Prometheus metrics (e.g. `/metrics`) |
 | STATIC_DIR       | string |               | Static directory to serve |
 | STATIC_SUB_PATH  | string | `"/static"`   | URL sub-path to serve `STATIC_DIR` from |

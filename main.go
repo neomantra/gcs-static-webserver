@@ -35,6 +35,7 @@ type ConfigSpec struct {
 	Port           int    `default:"80"`
 	SubPath        string `split_words:"true"`
 	IndexPath      string `split_words:"true"`
+	NotFoundPath   string `split_words:"true"`
 	MetricsPath    string `split_words:"true"`
 	StaticDir      string `split_words:"true"`
 	StaticSubPath  string `split_words:"true"`
@@ -85,14 +86,18 @@ func InitBucket() error {
 
 func HandleBucket(w http.ResponseWriter, r *http.Request) {
 	objectPath := config.BucketSubPath + r.URL.Path
-	oh := bucket.Object(objectPath)
 
+	if strings.HasSuffix(objectPath, "/") && config.IndexPath != "" {
+		objectPath += config.IndexPath
+	}
+
+	oh := bucket.Object(objectPath)
 	ctx := r.Context()
 	objAttrs, err := oh.Attrs(ctx)
 	if err != nil {
-		if err == storage.ErrObjectNotExist && config.IndexPath != "" {
-			// try /index.html
-			oh = bucket.Object(objectPath + config.IndexPath)
+		if err == storage.ErrObjectNotExist && config.NotFoundPath != "" {
+			// try /404.html
+			oh = bucket.Object(config.BucketSubPath + config.NotFoundPath)
 			objAttrs, err = oh.Attrs(ctx)
 		}
 		if err != nil {
